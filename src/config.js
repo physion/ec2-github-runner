@@ -13,6 +13,7 @@ class Config {
       label: core.getInput('label'),
       ec2InstanceId: core.getInput('ec2-instance-id'),
       iamRoleName: core.getInput('iam-role-name'),
+      keyPairName: core.getInput('key-pair-name')
     };
 
     const tags = JSON.parse(core.getInput('aws-resource-tags'));
@@ -39,6 +40,10 @@ class Config {
 
     if (!this.input.githubToken) {
       throw new Error(`The 'github-token' input is not specified`);
+    }
+
+    if (!this.input.keyPairName) {
+      throw new Error(`Must specify a key pair name`);
     }
 
     if (this.input.mode === 'start') {
