@@ -42,12 +42,8 @@ class Config {
       throw new Error(`The 'github-token' input is not specified`);
     }
 
-    if (!this.input.keyPairName) {
-      throw new Error(`Must specify a key pair name`);
-    }
-
     if (this.input.mode === 'start') {
-      if (!this.input.ec2ImageId || !this.input.ec2InstanceType || !this.input.subnetId || !this.input.securityGroupId) {
+      if (!this.input.ec2ImageId || !this.input.ec2InstanceType || !this.input.subnetId || !this.input.securityGroupId || !this.input.keyPairName) {
         throw new Error(`Not all the required inputs are provided for the 'start' mode`);
       }
     } else if (this.input.mode === 'stop') {
