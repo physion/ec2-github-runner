@@ -15,6 +15,11 @@ inputs:
     description: >-
       GitHub Personal Access Token with the 'repo' scope assigned.
     required: true
+  key-pair-name:
+    description: >-
+      Key pair name to use when creating the runner instance.
+      This input is required if you use the 'start' mode.
+    required: false
   ec2-image-id:
     description: >-
       EC2 Image Id (AMI). The new runner will be launched from this image.
