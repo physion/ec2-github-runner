@@ -11,10 +11,16 @@ jobs:
     name: Package distribution files
     runs-on: ubuntu-latest
     steps:
+      - id: get-branch
+        name: Get branch name
+        run: |
+          BRANCH=${{ github.ref }}
+          BRANCH=${BRANCH#"refs/heads/"}
+          echo "::set-output name=branch-name::${BRANCH}"
       - name: Checkout
         uses: actions/checkout@v2
         with:
-          ref: main
+          ref: ${{ steps.get-branch.outputs.branch-name }}
       - name: Install packages
         run: npm ci
       - name: Run linter
@@ -23,9 +29,7 @@ jobs:
         run: npm run package
       - name: Commit
         run: |
-          BRANCH=${{ github.ref }}
-          BRANCH=${BRANCH#"refs/heads/"}
           git config --global user.name "GitHub Actions"
           git add dist/
           git commit -m "Update dist" || echo "No changes to commit"
-          git push origin "${BRANCH}"
+          git push origin ${{ steps.get-branch.outputs.branch-name }}

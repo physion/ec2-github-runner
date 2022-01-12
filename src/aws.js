@@ -14,7 +14,11 @@ async function startEc2Instance(label, githubRegistrationToken) {
     'curl -O -L https://github.com/actions/runner/releases/download/v2.278.0/actions-runner-linux-${RUNNER_ARCH}-2.278.0.tar.gz',
     'tar xzf ./actions-runner-linux-${RUNNER_ARCH}-2.278.0.tar.gz',
     'export RUNNER_ALLOW_RUNASROOT=1',
+    'sudo echo "export RUNNER_ALLOW_RUNASROOT=1" >> /etc/profile.d/env.sh',
     'export DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=1',
+    'sudo echo "export DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=1" >> /etc/profile.d/env.sh',
+    'export DOTNET_SYSTEM_GLOBALIZATION_PREDEFINED_CULTURES_ONLY=false',
+    'sudo echo "export DOTNET_SYSTEM_GLOBALIZATION_PREDEFINED_CULTURES_ONLY=false" >> /etc/profile.d/env.sh',
     `./config.sh --unattended --url https://github.com/${config.githubContext.owner}/${config.githubContext.repo} --token ${githubRegistrationToken} --labels ${label}`,
     './run.sh',
   ];
