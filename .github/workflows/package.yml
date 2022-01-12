@@ -2,6 +2,7 @@ on:
   push:
     branches:
       - main
+  workflow_dispatch:
 
 name: Package
 
@@ -22,7 +23,9 @@ jobs:
         run: npm run package
       - name: Commit
         run: |
+          BRANCH=${{ github.ref }}
+          BRANCH=${BRANCH#"refs/heads/"}
           git config --global user.name "GitHub Actions"
           git add dist/
           git commit -m "Update dist" || echo "No changes to commit"
-          git push origin main
+          git push origin "${BRANCH}"
