@@ -17,6 +17,7 @@ async function startEc2Instance(label, githubRegistrationToken) {
     'sudo echo "export RUNNER_ALLOW_RUNASROOT=1" >> /etc/profile.d/env.sh',
     'export DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=1',
     'sudo echo "export DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=1" >> /etc/profile.d/env.sh',
+    'sudo echo "export DOTNET_SYSTEM_GLOBALIZATION_PREDEFINED_CULTURES_ONLY=true" >> /etc/profile.d/env.sh',
     `./config.sh --unattended --url https://github.com/${config.githubContext.owner}/${config.githubContext.repo} --token ${githubRegistrationToken} --labels ${label}`,
     './run.sh',
   ];
