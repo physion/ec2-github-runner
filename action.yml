@@ -66,6 +66,10 @@ inputs:
       for example: '[{"Key": "TagKey1", "Value": "TagValue1"}, {"Key": "TagKey2", "Value": "TagValue2"}]'
     required: false
     default: '[]'
+  runner-home-dir:
+    description: >-
+      Directory that contains actions-runner software and scripts. E.g. /home/runner/actions-runner.
+    required: false
 outputs:
   label:
     description: >-
@@ -78,5 +82,5 @@ outputs:
       EC2 Instance Id of the created runner.
       The id is used to terminate the EC2 instance when the runner is not needed anymore.
 runs:
-  using: node12
+  using: node16
   main: ./dist/index.js
