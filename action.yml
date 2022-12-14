@@ -1,5 +1,5 @@
-name: On-demand self-hosted AWS EC2 runner for GitHub Actions
-description: GitHub Action for automatic creation and registration AWS EC2 instance as a GitHub Actions self-hosted runner.
+name: On-demand self-hosted AWS EC2 runners for GitHub Actions
+description: GitHub Action for automatic creation and registration AWS EC2 instances as GitHub Actions self-hosted runners.
 author: Volodymyr Machula
 branding:
   icon: 'box'
@@ -8,8 +8,8 @@ inputs:
   mode:
     description: >-
       Specify here which mode you want to use:
-        - 'start' - to start a new runner;
-        - 'stop' - to stop the previously created runner.
+        - 'start' - to start new runners;
+        - 'stop' - to stop the previously created runners.
     required: true
   github-token:
     description: >-
@@ -17,12 +17,12 @@ inputs:
     required: true
   key-pair-name:
     description: >-
-      Key pair name to use when creating the runner instance.
+      Key pair name to use when creating the runner instances.
       This input is required if you use the 'start' mode.
     required: false
   ec2-image-id:
     description: >-
-      EC2 Image Id (AMI). The new runner will be launched from this image.
+      EC2 Image Id (AMI). The new runners will be launched from this image.
       This input is required if you use the 'start' mode.
     required: false
   ec2-instance-type:
@@ -30,6 +30,11 @@ inputs:
       EC2 Instance Type. 
       This input is required if you use the 'start' mode.
     required: false
+  ec2-instance-count:
+    description: >-
+      Number of EC2 instances to create.
+    required: false
+    default: 1
   subnet-id:
     description: >-
       VPC Subnet Id. The subnet should belong to the same VPC as the specified security group.
@@ -39,29 +44,32 @@ inputs:
     description: >-
       EC2 Security Group Id. 
       The security group should belong to the same VPC as the specified subnet.
-      The runner doesn't require any inbound traffic. However, outbound traffic should be allowed.
+      The runners don't require any inbound traffic. However, outbound traffic should be allowed.
       This input is required if you use the 'start' mode.
     required: false
   label:
     description: >-
-      Name of the unique label assigned to the runner.
-      The label is used to remove the runner from GitHub when the runner is not needed anymore.
+      Name of the unique label assigned to the runners.
+      The label is used to remove the runners from GitHub when the runners are not needed anymore.
       This input is required if you use the 'stop' mode.
     required: false
+  # This input's name is in the singular form for backwards compatibility
   ec2-instance-id:
     description: >-
-      EC2 Instance Id of the created runner.
-      The id is used to terminate the EC2 instance when the runner is not needed anymore.
-      This input is required if you use the 'stop' mode.
+      EC2 Instance Ids of the created runners.
+      The ids are used to terminate the EC2 instances when the runners are not needed anymore.
+      This input is required if you use the 'stop' mode. The value can either be in the form of
+      a single raw string containing a single EC2 instance id, or a JSON-encoded string representing
+      an array of id strings.
     required: false
   iam-role-name:
     description: >-
-      IAM Role Name to attach to the created EC2 instance.
+      IAM Role Name to attach to the created EC2 instances.
       This requires additional permissions on the AWS role used to launch instances.
     required: false
   aws-resource-tags:
     description: >-
-      Tags to attach to the launched EC2 instance and volume.
+      Tags to attach to the launched EC2 instances and volumes.
       This must be a stringified array of AWS Tag objects, with both Key and Value fields,
       for example: '[{"Key": "TagKey1", "Value": "TagValue1"}, {"Key": "TagKey2", "Value": "TagValue2"}]'
     required: false
@@ -73,14 +81,15 @@ inputs:
 outputs:
   label:
     description: >-
-      Name of the unique label assigned to the runner.
+      Name of the unique label assigned to the runners.
       The label is used in two cases:
       - to use as the input of 'runs-on' property for the following jobs;
-      - to remove the runner from GitHub when it is not needed anymore.
+      - to remove the runners from GitHub when they are not needed anymore.
+  # This output's name is in the singular form for backwards compatibility
   ec2-instance-id:
     description: >-
-      EC2 Instance Id of the created runner.
-      The id is used to terminate the EC2 instance when the runner is not needed anymore.
+      EC2 Instance Ids of the created runners.
+      The ids are used to terminate the EC2 instances when the runners are not needed anymore.
 runs:
   using: node16
   main: ./dist/index.js
