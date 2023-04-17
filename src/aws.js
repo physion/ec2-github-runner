@@ -16,7 +16,7 @@ function buildUserDataScript(githubRegistrationToken, label) {
       'sudo echo "export DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=1" >> /etc/profile.d/env.sh',
       'export DOTNET_SYSTEM_GLOBALIZATION_PREDEFINED_CULTURES_ONLY=false',
       'sudo echo "export DOTNET_SYSTEM_GLOBALIZATION_PREDEFINED_CULTURES_ONLY=false" >> /etc/profile.d/env.sh',
-      `./config.sh --unattended --url https://github.com/${config.githubContext.owner}/${config.githubContext.repo} --token ${githubRegistrationToken} --labels ${label}`,
+      `./config.sh --unattended --url https://github.com/${config.githubContext.owner}/${config.githubContext.repo} --token ${githubRegistrationToken} --labels ${label} --name $(hostname | cut -c1-27)-$(uuidgen)`,
       './run.sh',
     ];
   } else {
@@ -24,15 +24,15 @@ function buildUserDataScript(githubRegistrationToken, label) {
       '#!/bin/bash',
       'mkdir actions-runner && cd actions-runner',
       'case $(uname -m) in aarch64) ARCH="arm64" ;; amd64|x86_64) ARCH="x64" ;; esac && export RUNNER_ARCH=${ARCH}',
-      'curl -O -L https://github.com/actions/runner/releases/download/v2.286.0/actions-runner-linux-${RUNNER_ARCH}-2.286.0.tar.gz',
-      'tar xzf ./actions-runner-linux-${RUNNER_ARCH}-2.286.0.tar.gz',
+      'curl -O -L https://github.com/actions/runner/releases/download/v2.299.1/actions-runner-linux-${RUNNER_ARCH}-2.299.1.tar.gz',
+      'tar xzf ./actions-runner-linux-${RUNNER_ARCH}-2.299.1.tar.gz',
       'export RUNNER_ALLOW_RUNASROOT=1',
       'sudo echo "export RUNNER_ALLOW_RUNASROOT=1" >> /etc/profile.d/env.sh',
       'export DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=1',
       'sudo echo "export DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=1" >> /etc/profile.d/env.sh',
       'export DOTNET_SYSTEM_GLOBALIZATION_PREDEFINED_CULTURES_ONLY=false',
       'sudo echo "export DOTNET_SYSTEM_GLOBALIZATION_PREDEFINED_CULTURES_ONLY=false" >> /etc/profile.d/env.sh',
-      `./config.sh --unattended --url https://github.com/${config.githubContext.owner}/${config.githubContext.repo} --token ${githubRegistrationToken} --labels ${label}`,
+      `./config.sh --unattended --url https://github.com/${config.githubContext.owner}/${config.githubContext.repo} --token ${githubRegistrationToken} --labels ${label} --name $(hostname | cut -c1-27)-$(uuidgen)`,
       './run.sh',
     ];
   }
