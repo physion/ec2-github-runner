@@ -16,7 +16,7 @@ function buildUserDataScript(githubRegistrationToken, label) {
       'sudo echo "export DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=1" >> /etc/profile.d/env.sh',
       'export DOTNET_SYSTEM_GLOBALIZATION_PREDEFINED_CULTURES_ONLY=false',
       'sudo echo "export DOTNET_SYSTEM_GLOBALIZATION_PREDEFINED_CULTURES_ONLY=false" >> /etc/profile.d/env.sh',
-      `./config.sh --unattended --url https://github.com/${config.githubContext.owner}/${config.githubContext.repo} --token ${githubRegistrationToken} --labels ${label} --name $(hostname)-$(uuidgen)`,
+      `./config.sh --unattended --url https://github.com/${config.githubContext.owner}/${config.githubContext.repo} --token ${githubRegistrationToken} --labels ${label} --name $(hostname | cut -c1-27)-$(uuidgen)`,
       './run.sh',
     ];
   } else {
@@ -32,7 +32,7 @@ function buildUserDataScript(githubRegistrationToken, label) {
       'sudo echo "export DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=1" >> /etc/profile.d/env.sh',
       'export DOTNET_SYSTEM_GLOBALIZATION_PREDEFINED_CULTURES_ONLY=false',
       'sudo echo "export DOTNET_SYSTEM_GLOBALIZATION_PREDEFINED_CULTURES_ONLY=false" >> /etc/profile.d/env.sh',
-      `./config.sh --unattended --url https://github.com/${config.githubContext.owner}/${config.githubContext.repo} --token ${githubRegistrationToken} --labels ${label} --name $(hostname)-$(uuidgen)`,
+      `./config.sh --unattended --url https://github.com/${config.githubContext.owner}/${config.githubContext.repo} --token ${githubRegistrationToken} --labels ${label} --name $(hostname | cut -c1-27)-$(uuidgen)`,
       './run.sh',
     ];
   }
