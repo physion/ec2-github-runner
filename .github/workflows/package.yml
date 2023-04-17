@@ -18,7 +18,7 @@ jobs:
           BRANCH=${BRANCH#"refs/heads/"}
           echo "::set-output name=branch-name::${BRANCH}"
       - name: Checkout
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
         with:
           ref: ${{ steps.get-branch.outputs.branch-name }}
       - name: Install packages
