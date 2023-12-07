@@ -10,6 +10,8 @@ function buildUserDataScript(githubRegistrationToken, label) {
     return [
       '#!/bin/bash',
       `cd "${config.input.runnerHomeDir}"`,
+      `echo "${config.input.preRunnerScript}" > pre-runner-script.sh`,
+      'source pre-runner-script.sh',
       'export RUNNER_ALLOW_RUNASROOT=1',
       'sudo echo "export RUNNER_ALLOW_RUNASROOT=1" >> /etc/profile.d/env.sh',
       'export DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=1',
@@ -23,6 +25,8 @@ function buildUserDataScript(githubRegistrationToken, label) {
     return [
       '#!/bin/bash',
       'mkdir actions-runner && cd actions-runner',
+      `echo "${config.input.preRunnerScript}" > pre-runner-script.sh`,
+      'source pre-runner-script.sh',
       'case $(uname -m) in aarch64) ARCH="arm64" ;; amd64|x86_64) ARCH="x64" ;; esac && export RUNNER_ARCH=${ARCH}',
       'curl -O -L https://github.com/actions/runner/releases/download/v2.299.1/actions-runner-linux-${RUNNER_ARCH}-2.299.1.tar.gz',
       'tar xzf ./actions-runner-linux-${RUNNER_ARCH}-2.299.1.tar.gz',
