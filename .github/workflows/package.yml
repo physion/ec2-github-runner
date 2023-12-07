@@ -27,11 +27,11 @@ jobs:
         run: npm run lint
       - name: Package
         run: npm run package
+        env:
+          NODE_OPTIONS: --openssl-legacy-provider
       - name: Commit
         run: |
           git config --global user.name "GitHub Actions"
           git add dist/
           git commit -m "Update dist" || echo "No changes to commit"
           git push origin ${{ steps.get-branch.outputs.branch-name }}
-        env:
-          NODE_OPTIONS: --openssl-legacy-provider
