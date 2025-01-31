@@ -87,6 +87,11 @@ inputs:
       Specifies the market (purchasing) option for the instance:
           - 'spot' - Use a spot instance
     required: false
+  keep-runner-on-stop:
+    description: >-
+      If true, keep the runner alive (running) on stop, but still de-register it from GitHub. Useful for debugging failed jobs. Default false.
+    required: false
+    default: "false"
 
 outputs:
   label:
