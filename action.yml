@@ -27,7 +27,7 @@ inputs:
     required: false
   ec2-instance-type:
     description: >-
-      EC2 Instance Type. 
+      EC2 Instance Type.
       This input is required if you use the 'start' mode.
     required: false
   ec2-instance-count:
@@ -42,7 +42,7 @@ inputs:
     required: false
   security-group-id:
     description: >-
-      EC2 Security Group Id. 
+      EC2 Security Group Id.
       The security group should belong to the same VPC as the specified subnet.
       The runners don't require any inbound traffic. However, outbound traffic should be allowed.
       This input is required if you use the 'start' mode.
@@ -82,6 +82,11 @@ inputs:
     description: >-
       Specifies bash commands to run before the runner starts. It's useful for installing dependencies with apt-get, yum, dnf, etc.
     required: false
+  market-type:
+    description: >-
+      Specifies the market (purchasing) option for the instance:
+          - 'spot' - Use a spot instance
+    required: false
 
 outputs:
   label:
@@ -96,5 +101,5 @@ outputs:
       EC2 Instance Ids of the created runners.
       The ids are used to terminate the EC2 instances when the runners are not needed anymore.
 runs:
-  using: node16
+  using: node20
   main: ./dist/index.js
