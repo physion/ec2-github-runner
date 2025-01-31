@@ -89,7 +89,7 @@ async function startEc2Instances(label, count, githubRegistrationToken) {
 }
 
 async function terminateEc2Instances() {
-  const ec2 = new new EC2Client();
+  const ec2 = new EC2Client();
 
   const params = {
     InstanceIds: config.input.ec2InstanceIds,
@@ -98,7 +98,6 @@ async function terminateEc2Instances() {
   try {
     await ec2.send(new TerminateInstancesCommand(params));
     core.info(`AWS EC2 instances ${JSON.stringify(config.input.ec2InstanceIds)} are terminated`);
-    return;
   } catch (error) {
     core.error(`AWS EC2 instances ${JSON.stringify(config.input.ec2InstanceIds)} termination error`);
     throw error;
@@ -106,7 +105,7 @@ async function terminateEc2Instances() {
 }
 
 async function waitForInstancesRunning(ec2InstanceIds) {
-  const ec2 = new new EC2Client();
+  const ec2 = new EC2Client();
   try {
     core.info(`Checking for AWS EC2 instances ${JSON.stringify(ec2InstanceIds)} to be up and running`);
     await waitUntilInstanceRunning(
@@ -124,7 +123,6 @@ async function waitForInstancesRunning(ec2InstanceIds) {
       },
     );
     core.info(`AWS EC2 instances ${JSON.stringify(ec2InstanceIds)} are up and running`);
-    return;
   } catch (error) {
     core.error(`AWS EC2 instances ${JSON.stringify(ec2InstanceIds)} initialization error`);
     throw error;
