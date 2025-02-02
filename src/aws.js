@@ -1,4 +1,5 @@
-const AWS = require('aws-sdk');
+const { EC2Client, RunInstancesCommand, TerminateInstancesCommand, waitUntilInstanceRunning } = require('@aws-sdk/client-ec2');
+
 const core = require('@actions/core');
 const config = require('./config');
 
@@ -28,8 +29,8 @@ function buildUserDataScript(githubRegistrationToken, label) {
       `echo "${config.input.preRunnerScript}" > pre-runner-script.sh`,
       'source pre-runner-script.sh',
       'case $(uname -m) in aarch64) ARCH="arm64" ;; amd64|x86_64) ARCH="x64" ;; esac && export RUNNER_ARCH=${ARCH}',
-      'curl -O -L https://github.com/actions/runner/releases/download/v2.299.1/actions-runner-linux-${RUNNER_ARCH}-2.299.1.tar.gz',
-      'tar xzf ./actions-runner-linux-${RUNNER_ARCH}-2.299.1.tar.gz',
+      'curl -O -L https://github.com/actions/runner/releases/download/v2.313.0/actions-runner-linux-${RUNNER_ARCH}-2.313.0.tar.gz',
+      'tar xzf ./actions-runner-linux-${RUNNER_ARCH}-2.313.0.tar.gz',
       'export RUNNER_ALLOW_RUNASROOT=1',
       'sudo echo "export RUNNER_ALLOW_RUNASROOT=1" >> /etc/profile.d/env.sh',
       'export DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=1',
@@ -42,8 +43,21 @@ function buildUserDataScript(githubRegistrationToken, label) {
   }
 }
 
+function buildMarketOptions() {
+  if (config.input.marketType !== 'spot') {
+    return undefined;
+  }
+
+  return {
+    MarketType: config.input.marketType,
+    SpotOptions: {
+      SpotInstanceType: 'one-time',
+    },
+  };
+}
+
 async function startEc2Instances(label, count, githubRegistrationToken) {
-  const ec2 = new AWS.EC2();
+  const ec2 = new EC2Client();
 
   // User data scripts are run as the root user.
   // Docker and git are necessary for GitHub runner and should be pre-installed on the AMI.
@@ -59,11 +73,12 @@ async function startEc2Instances(label, count, githubRegistrationToken) {
     SecurityGroupIds: [config.input.securityGroupId],
     IamInstanceProfile: { Name: config.input.iamRoleName },
     TagSpecifications: config.tagSpecifications,
+    InstanceMarketOptions: buildMarketOptions(),
     KeyName: config.input.keyPairName
   };
 
   try {
-    const result = await ec2.runInstances(params).promise();
+    const result = await ec2.send(new RunInstancesCommand(params));
     const ec2InstanceIds = result.Instances.map(i => i.InstanceId);
     core.info(`AWS EC2 instances ${JSON.stringify(ec2InstanceIds)} are started`);
     return ec2InstanceIds;
@@ -74,16 +89,15 @@ async function startEc2Instances(label, count, githubRegistrationToken) {
 }
 
 async function terminateEc2Instances() {
-  const ec2 = new AWS.EC2();
+  const ec2 = new EC2Client();
 
   const params = {
     InstanceIds: config.input.ec2InstanceIds,
   };
 
   try {
-    await ec2.terminateInstances(params).promise();
+    await ec2.send(new TerminateInstancesCommand(params));
     core.info(`AWS EC2 instances ${JSON.stringify(config.input.ec2InstanceIds)} are terminated`);
-    return;
   } catch (error) {
     core.error(`AWS EC2 instances ${JSON.stringify(config.input.ec2InstanceIds)} termination error`);
     throw error;
@@ -91,16 +105,24 @@ async function terminateEc2Instances() {
 }
 
 async function waitForInstancesRunning(ec2InstanceIds) {
-  const ec2 = new AWS.EC2();
-
-  const params = {
-    InstanceIds: ec2InstanceIds,
-  };
-
+  const ec2 = new EC2Client();
   try {
-    await ec2.waitFor('instanceRunning', params).promise();
+    core.info(`Checking for AWS EC2 instances ${JSON.stringify(ec2InstanceIds)} to be up and running`);
+    await waitUntilInstanceRunning(
+      {
+        client: ec2,
+        maxWaitTime: 300,
+      },
+      {
+        Filters: [
+          {
+            Name: 'instance-id',
+            Values: ec2InstanceIds,
+          },
+        ],
+      },
+    );
     core.info(`AWS EC2 instances ${JSON.stringify(ec2InstanceIds)} are up and running`);
-    return;
   } catch (error) {
     core.error(`AWS EC2 instances ${JSON.stringify(ec2InstanceIds)} initialization error`);
     throw error;

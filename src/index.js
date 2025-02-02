@@ -18,7 +18,15 @@ async function start() {
 }
 
 async function stop() {
-  await aws.terminateEc2Instances();
+  const keepRunnerOnStop = config.input.keepRunnerOnStop === true;
+
+  // Don't terminate the EC2 instances if the runner is kept for debugging
+  if (!keepRunnerOnStop) {
+    await aws.terminateEc2Instances();
+  }
+
+  // We do want to still de-register the runner since we can't re-use it once the build stops
+  // this prevents the runners from being registered indefinitely
   await gh.removeRunners();
 }
 
