@@ -12,9 +12,14 @@ async function getRunners(label) {
     const runners = await octokit.paginate('GET /repos/{owner}/{repo}/actions/runners', config.githubContext);
     return _.filter(runners, { labels: [{ name: label }] });
   } catch (error) {
-    core.error(`Error fetching current runners: ${error}`)
+    core.error(`Error fetching current runners: ${error}`);
     return [];
   }
+}
+
+async function getRunner(label) {
+  const runners = await getRunners(label);
+  return runners.length > 0 ? runners[0] : null;
 }
 
 // get GitHub Registration Token for registering a self-hosted runner
@@ -31,55 +36,163 @@ async function getRegistrationToken() {
   }
 }
 
-async function removeRunners() {
-  const runners = await getRunners(config.input.label);
+// generate a JIT (Just-In-Time) runner configuration via the GitHub API
+async function getJitRunnerConfig(label) {
+  const octokit = github.getOctokit(config.input.githubToken);
+
+  try {
+    const response = await octokit.request(
+      'POST /repos/{owner}/{repo}/actions/runners/generate-jitconfig',
+      {
+        ...config.githubContext,
+        name: `ec2-${label}`,
+        runner_group_id: config.input.runnerGroupId,
+        labels: [label],
+        work_folder: '_work',
+      }
+    );
+
+    core.info('GitHub JIT runner configuration is received');
+    return {
+      runnerId: response.data.runner.id,
+      encodedJitConfig: response.data.encoded_jit_config,
+    };
+  } catch (error) {
+    core.error('GitHub JIT runner configuration generation error');
+    throw error;
+  }
+}
+
+async function removeRunner() {
+  const runner = await getRunner(config.input.label);
   const octokit = github.getOctokit(config.input.githubToken);
 
   // skip the runner removal process if the runner is not found
+  if (!runner) {
+    core.info(`GitHub self-hosted runner with label ${config.input.label} is not found, so the removal is skipped`);
+    return;
+  }
+
+  try {
+    await octokit.request('DELETE /repos/{owner}/{repo}/actions/runners/{runner_id}', _.merge(config.githubContext, { runner_id: runner.id }));
+    core.info(`GitHub self-hosted runner ${runner.name} is removed`);
+    return;
+  } catch (error) {
+    core.error('GitHub self-hosted runner removal error');
+    throw error;
+  }
+}
+
+async function removeRunners() {
+  if (!config.input.label) {
+    core.info('The label input is not set, so GitHub runner removal is skipped');
+    return;
+  }
+
+  const runners = await getRunners(config.input.label);
+  const octokit = github.getOctokit(config.input.githubToken);
+
   if (!runners || runners.length === 0) {
     core.info(`GitHub self-hosted runners with label ${config.input.label} are not found, so the removal is skipped`);
     return;
   }
 
   try {
-    await Promise.all(runners.map(r => octokit.request('DELETE /repos/{owner}/{repo}/actions/runners/{runner_id}', _.merge(config.githubContext, { runner_id: r.id }))));
-    core.info(`GitHub self-hosted runners ${runners.map(r => r.name)} are removed`);
-    return;
+    await Promise.all(
+      runners.map((runner) =>
+        octokit.request(
+          'DELETE /repos/{owner}/{repo}/actions/runners/{runner_id}',
+          _.merge(config.githubContext, { runner_id: runner.id })
+        )
+      )
+    );
+    core.info(`GitHub self-hosted runners ${runners.map((runner) => runner.name)} are removed`);
   } catch (error) {
     core.error('GitHub self-hosted runners removal error');
     throw error;
   }
 }
 
-async function waitForRunnersRegistered(label, expectedRunnerCount) {
-  const timeoutMinutes = 5;
-  const retryIntervalSeconds = 10;
-  const quietPeriodSeconds = 30;
-  let waitSeconds = 0;
+async function waitForRunnerRegistered(label, onPollCallback) {
+  const timeoutMinutes = parseInt(config.input.startupTimeoutMinutes) || 5;
+  const retryIntervalSeconds = parseInt(config.input.startupRetryIntervalSeconds) || 10;
+  const quietPeriodSeconds = parseInt(config.input.startupQuietPeriodSeconds) || 30;
 
-  core.info(`Waiting ${quietPeriodSeconds}s for the AWS EC2 instances to be registered in GitHub as the new self-hosted runners`);
+  core.info(`Waiting ${quietPeriodSeconds}s for the AWS EC2 instance to be registered in GitHub as a new self-hosted runner`);
   await new Promise((r) => setTimeout(r, quietPeriodSeconds * 1000));
-  core.info(`Checking every ${retryIntervalSeconds}s if the GitHub self-hosted runners are registered`);
+  core.info(`Checking every ${retryIntervalSeconds}s if the GitHub self-hosted runner is registered`);
+  core.info(`The maximum waiting time is ${timeoutMinutes} minutes`);
+
+  const startTime = Date.now();
+  const timeoutMs = timeoutMinutes * 60 * 1000;
 
   return new Promise((resolve, reject) => {
     const interval = setInterval(async () => {
-      const runners = await getRunners(label);
+      const elapsedMs = Date.now() - startTime;
+      const elapsedSec = Math.round(elapsedMs / 1000);
+      const runner = await getRunner(label);
 
-      if (waitSeconds > timeoutMinutes * 60) {
-        core.error('GitHub self-hosted runners registration error');
-        clearInterval(interval);
-        reject(
-          `A timeout of ${timeoutMinutes} minutes is exceeded. Your AWS EC2 instances were not able to register themselves in GitHub as the new self-hosted runners.`,
-        );
-      }
-
-      if (runners && runners.length == expectedRunnerCount && runners.every(r => r.status === 'online')) {
-        core.info(`GitHub self-hosted runners ${JSON.stringify(runners.map(r => r.name))} are registered and ready to use`);
+      if (runner && runner.status === 'online') {
+        core.info(`GitHub self-hosted runner ${runner.name} is registered and ready to use`);
         clearInterval(interval);
         resolve();
+      } else if (elapsedMs >= timeoutMs) {
+        core.error('GitHub self-hosted runner registration error');
+        // Fetch console output one last time before failing
+        if (onPollCallback) {
+          try { await onPollCallback(); } catch (e) { core.warning(`Poll callback error: ${e.message}`); }
+        }
+        clearInterval(interval);
+        reject(
+          `A timeout of ${timeoutMinutes} minutes is exceeded. Your AWS EC2 instance was not able to register itself in GitHub as a new self-hosted runner.`,
+        );
       } else {
-        waitSeconds += retryIntervalSeconds;
-        core.info('Checking...');
+        core.info(`Checking... (${elapsedSec}s elapsed)`);
+        if (onPollCallback) {
+          try { await onPollCallback(); } catch (e) { core.warning(`Poll callback error: ${e.message}`); }
+        }
+      }
+    }, retryIntervalSeconds * 1000);
+  });
+}
+
+async function waitForRunnersRegistered(label, expectedRunnerCount, onPollCallback) {
+  const timeoutMinutes = parseInt(config.input.startupTimeoutMinutes) || 5;
+  const retryIntervalSeconds = parseInt(config.input.startupRetryIntervalSeconds) || 10;
+  const quietPeriodSeconds = parseInt(config.input.startupQuietPeriodSeconds) || 30;
+
+  core.info(`Waiting ${quietPeriodSeconds}s for the AWS EC2 instances to be registered in GitHub as new self-hosted runners`);
+  await new Promise((r) => setTimeout(r, quietPeriodSeconds * 1000));
+  core.info(`Checking every ${retryIntervalSeconds}s if the GitHub self-hosted runners are registered`);
+  core.info(`The maximum waiting time is ${timeoutMinutes} minutes`);
+
+  const startTime = Date.now();
+  const timeoutMs = timeoutMinutes * 60 * 1000;
+
+  return new Promise((resolve, reject) => {
+    const interval = setInterval(async () => {
+      const elapsedMs = Date.now() - startTime;
+      const elapsedSec = Math.round(elapsedMs / 1000);
+      const runners = await getRunners(label);
+
+      if (runners.length >= expectedRunnerCount && runners.slice(0, expectedRunnerCount).every((runner) => runner.status === 'online')) {
+        core.info(`GitHub self-hosted runners ${JSON.stringify(runners.map((runner) => runner.name))} are registered and ready to use`);
+        clearInterval(interval);
+        resolve();
+      } else if (elapsedMs >= timeoutMs) {
+        core.error('GitHub self-hosted runners registration error');
+        if (onPollCallback) {
+          try { await onPollCallback(); } catch (e) { core.warning(`Poll callback error: ${e.message}`); }
+        }
+        clearInterval(interval);
+        reject(
+          `A timeout of ${timeoutMinutes} minutes is exceeded. Your AWS EC2 instances were not able to register themselves in GitHub as new self-hosted runners.`,
+        );
+      } else {
+        core.info(`Checking... (${elapsedSec}s elapsed)`);
+        if (onPollCallback) {
+          try { await onPollCallback(); } catch (e) { core.warning(`Poll callback error: ${e.message}`); }
+        }
       }
     }, retryIntervalSeconds * 1000);
   });
@@ -87,6 +200,9 @@ async function waitForRunnersRegistered(label, expectedRunnerCount) {
 
 module.exports = {
   getRegistrationToken,
+  getJitRunnerConfig,
   removeRunners,
+  removeRunner,
   waitForRunnersRegistered,
+  waitForRunnerRegistered,
 };

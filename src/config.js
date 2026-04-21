@@ -4,22 +4,40 @@ const github = require('@actions/github');
 class Config {
   constructor() {
     this.input = {
-      mode: core.getInput('mode'),
-      githubToken: core.getInput('github-token'),
       ec2ImageId: core.getInput('ec2-image-id'),
-      ec2InstanceType: core.getInput('ec2-instance-type'),
+      ec2InstanceId: core.getInput('ec2-instance-id'),
       ec2InstanceCount: core.getInput('ec2-instance-count'),
-      subnetId: core.getInput('subnet-id'),
-      securityGroupId: core.getInput('security-group-id'),
-      label: core.getInput('label'),
-      ec2InstanceIds: core.getInput('ec2-instance-id'),
+      ec2InstanceType: core.getInput('ec2-instance-type'),
+      githubToken: core.getInput('github-token'),
       iamRoleName: core.getInput('iam-role-name'),
       keyPairName: core.getInput('key-pair-name'),
-      runnerHomeDir: core.getInput('runner-home-dir'),
-      preRunnerScript: core.getInput('pre-runner-script'),
+      label: core.getInput('label'),
+      keepRunnerOnStop: core.getInput('keep-runner-on-stop') === 'true',
       marketType: core.getInput('market-type'),
-      keepRunnerOnStop: core.getBooleanInput('keep-runner-on-stop'),
+      mode: core.getInput('mode'),
+      preRunnerScript: core.getInput('pre-runner-script'),
+      runnerHomeDir: core.getInput('runner-home-dir'),
+      securityGroupId: core.getInput('security-group-id'),
+      startupQuietPeriodSeconds: core.getInput('startup-quiet-period-seconds'),
+      startupRetryIntervalSeconds: core.getInput('startup-retry-interval-seconds'),
+      startupTimeoutMinutes: core.getInput('startup-timeout-minutes'),
+      subnetId: core.getInput('subnet-id'),
+      runAsService: core.getInput('run-runner-as-service') === 'true',
+      runAsUser: core.getInput('run-runner-as-user'),
+      ec2VolumeSize: core.getInput('ec2-volume-size'),
+      ec2DeviceName: core.getInput('ec2-device-name'),
+      ec2VolumeType: core.getInput('ec2-volume-type'),
+      blockDeviceMappings: JSON.parse(core.getInput('block-device-mappings') || '[]'),
+      availabilityZonesConfig: core.getInput('availability-zones-config'),
+      metadataOptions: JSON.parse(core.getInput('metadata-options') || '{}'),
+      packages: JSON.parse(core.getInput('packages') || '[]'),
+      useJit: core.getInput('use-jit') === 'true',
+      runnerGroupId: parseInt(core.getInput('runner-group-id') || '1', 10),
+      runnerDebug: core.getInput('runner-debug') === 'true',
     };
+
+    // Get the AWS_REGION environment variable
+    this.defaultRegion = process.env.AWS_REGION;
 
     const tags = JSON.parse(core.getInput('aws-resource-tags'));
     this.tagSpecifications = null;
@@ -50,36 +68,102 @@ class Config {
       throw new Error(`The 'github-token' input is not specified`);
     }
 
+    // Initialize availabilityZones as an empty array
+    this.availabilityZones = [];
+
     if (this.input.mode === 'start') {
-      if (!this.input.ec2ImageId || !this.input.ec2InstanceType || !this.input.subnetId || !this.input.securityGroupId || !this.input.keyPairName) {
-        throw new Error(`Not all the required inputs are provided for the 'start' mode`);
+      // Parse availability zones config if provided
+      if (this.input.availabilityZonesConfig) {
+        try {
+          this.availabilityZones = JSON.parse(this.input.availabilityZonesConfig);
+
+          // Validate each availability zone configuration
+          if (!Array.isArray(this.availabilityZones)) {
+            throw new Error('availability-zones-config must be a JSON array');
+          }
+
+          this.availabilityZones.forEach((az, index) => {
+            if (!az.imageId) {
+              throw new Error(`Missing imageId in availability-zones-config at index ${index}`);
+            }
+            if (!az.subnetId) {
+              throw new Error(`Missing subnetId in availability-zones-config at index ${index}`);
+            }
+            if (!az.securityGroupId) {
+              throw new Error(`Missing securityGroupId in availability-zones-config at index ${index}`);
+            }
+            // Region is optional, will use the default if not specified
+            if (!az.region) {
+              az.region = this.defaultRegion;
+            }
+          });
+        } catch (error) {
+          throw new Error(`Failed to parse availability-zones-config: ${error.message}`);
+        }
       }
 
-      if (this.marketType?.length > 0 && this.input.marketType !== 'spot') {
+      // Check for required instance type regardless of config method
+      if (!this.input.ec2InstanceType) {
+        throw new Error(`The 'ec2-instance-type' input is required for the 'start' mode.`);
+      }
+
+      // If no availability zones config provided, check for individual parameters
+      if (this.availabilityZones.length === 0) {
+        if (!this.input.ec2ImageId || !this.input.subnetId || !this.input.securityGroupId) {
+          throw new Error(
+            `Either provide 'availability-zones-config' or all of the following: 'ec2-image-id', 'subnet-id', 'security-group-id'`
+          );
+        }
+
+        // Convert individual parameters to a single availability zone config
+        this.availabilityZones.push({
+          imageId: this.input.ec2ImageId,
+          subnetId: this.input.subnetId,
+          securityGroupId: this.input.securityGroupId,
+          // Add default region when using legacy configuration
+          region: this.defaultRegion
+        });
+
+        core.info('Using individual parameters as a single availability zone configuration');
+      }
+
+      if (this.input.useJit && this.input.runAsService) {
+        throw new Error(
+          "The 'use-jit' and 'run-runner-as-service' inputs are incompatible. " +
+          'JIT runners are single-use and cannot run as a service.'
+        );
+      }
+
+      if (this.input.useJit && this.input.ec2InstanceCount && parseInt(this.input.ec2InstanceCount, 10) > 1) {
+        throw new Error("The 'use-jit' input is incompatible with launching more than one EC2 instance.");
+      }
+
+      if (this.input.marketType?.length > 0 && this.input.marketType !== 'spot') {
         throw new Error('Invalid `market-type` input. Allowed values: spot.');
       }
 
-      if (this.input.ec2InstanceCount === undefined) {
-        this.input.ec2InstanceCount = 1;
-      }
-      const parsedEc2InstanceCount = parseInt(this.input.ec2InstanceCount);
-      if (isNaN(parsedEc2InstanceCount)) {
+      const parsedEc2InstanceCount = parseInt(this.input.ec2InstanceCount || '1', 10);
+      if (Number.isNaN(parsedEc2InstanceCount)) {
         throw new Error(`The 'ec2-instance-count' input has illegal value '${this.input.ec2InstanceCount}'`);
-      } else if (parsedEc2InstanceCount < 1) {
+      }
+      if (parsedEc2InstanceCount < 1) {
         throw new Error(`The 'ec2-instance-count' input must be greater than zero`);
       }
       this.input.ec2InstanceCount = parsedEc2InstanceCount;
     } else if (this.input.mode === 'stop') {
-      if (!this.input.label || !this.input.ec2InstanceIds) {
-        throw new Error(`Not all the required inputs are provided for the 'stop' mode`);
+      if (!this.input.ec2InstanceId) {
+        throw new Error(`The 'ec2-instance-id' input is required for the 'stop' mode.`);
+      }
+      if (!this.input.label) {
+        core.warning(`The 'label' input is not specified for the 'stop' mode. The runner will be removed by the 'ec2-instance-id' input.`);
       }
 
       try {
-        const parsedEc2InstanceIds = JSON.parse(this.input.ec2InstanceIds);
-        this.input.ec2InstanceIds = parsedEc2InstanceIds;
+        const parsedEc2InstanceIds = JSON.parse(this.input.ec2InstanceId);
+        this.input.ec2InstanceIds = Array.isArray(parsedEc2InstanceIds) ? parsedEc2InstanceIds : [parsedEc2InstanceIds];
       } catch (error) {
-        core.info(`Got error ${error} when parsing '${this.input.ec2InstanceIds}' as JSON, assuming that it is a raw string containing a single EC2 instance ID`);
-        this.input.ec2InstanceIds = [this.input.ec2InstanceIds];
+        core.info(`Got error ${error} when parsing '${this.input.ec2InstanceId}' as JSON, assuming that it is a raw string containing a single EC2 instance ID`);
+        this.input.ec2InstanceIds = [this.input.ec2InstanceId];
       }
     } else {
       throw new Error('Wrong mode. Allowed values: start, stop.');
@@ -97,3 +181,5 @@ try {
   core.error(error);
   core.setFailed(error.message);
 }
+
+module.exports.Config = Config;
